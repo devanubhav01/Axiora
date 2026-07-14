@@ -370,7 +370,7 @@ const Dashboard = () => {
                         <h3 className="text-lg font-bold text-black">OTP Verification</h3>
                         <p className="text-sm text-gray-600">Enter the 6-digit OTP code sent to <span className="font-semibold text-black">{form.phone}</span>.</p>
                         <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 p-2.5 rounded-lg font-mono text-center select-all">
-                            🔑 [Localhost Test] Use OTP: <strong>{generatedOtp}</strong>
+                              OTP: <strong>{generatedOtp}</strong>
                         </p>
                         
                         <input 
