@@ -3,9 +3,9 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 
-// Ensure resumes folder exists in public directory
+// Use /tmp directory - the only writable directory in Vercel's serverless environment
 const ensureResumesDir = () => {
-    const dir = path.join(process.cwd(), "public", "resumes");
+    const dir = path.join("/tmp", "resumes");
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
@@ -186,5 +186,12 @@ export const handleResumeGenerationAndEmail = async (resume) => {
         await sendResumeEmail(resume, pdfPath);
     } catch (emailError) {
         console.error("Failed to send email:", emailError);
+    }
+
+    // 3. Clean up the temp file after use (optional but good practice)
+    try {
+        fs.unlinkSync(pdfPath);
+    } catch (cleanupError) {
+        console.error("Failed to delete temp PDF:", cleanupError);
     }
 };
