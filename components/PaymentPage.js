@@ -507,7 +507,7 @@ const PaymentPage = ({ username }) => {
                                     Contribute & Connect →
                                 </button>
                                 <p className="text-center text-[10px] text-[#767676]" style={interStyle}>
-                                    💡 Desktop localhost par Google Pay/UPI direct open nahi hota. Card / Netbanking choose karein.
+                                    
                                 </p>
                             </div>
 
