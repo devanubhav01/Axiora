@@ -303,7 +303,7 @@ function CreateResumeContent() {
                                 {loading ? "Initiating Checkout..." : "Pay ₹1 & Generate Resume"}
                             </button>
                             <p className="text-center text-xs text-[#767676] mt-3">
-                                💡 <strong>Test Mode Tip:</strong> Desktop localhost par Google Pay/UPI apps direct open nahi hoti hain. Payment karne ke liye modal mein <strong>Card</strong> (test card details ke saath) ya <strong>Netbanking</strong> select karke success karein.
+                                
                             </p>
                         </div>
                     </form>
