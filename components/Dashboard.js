@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react"
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { fetchuser, updateProfile } from '@/actions/useractions'
+import { auth } from '@/lib/firebase'
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
 
 const Dashboard = () => {
     const { data: session, update } = useSession()
@@ -11,7 +13,9 @@ const Dashboard = () => {
     const [form, setform] = useState({})
     const [otpModal, setOtpModal] = useState(false)
     const [enteredOtp, setEnteredOtp] = useState("")
-    const [generatedOtp, setGeneratedOtp] = useState("")
+    const [confirmationResult, setConfirmationResult] = useState(null)
+    const [sendingOtp, setSendingOtp] = useState(false)
+    const [verifyingOtp, setVerifyingOtp] = useState(false)
     const [notification, setNotification] = useState(null)
 
     const showNotification = (type, message) => {
@@ -32,24 +36,70 @@ const Dashboard = () => {
         setform({ ...form, phone: e.target.value, phoneVerified: false })
     }
 
-    const sendOTP = () => {
+    // Formats a raw phone number into E.164 (e.g. 9876543210 -> +919876543210).
+    // Assumes India (+91) if the user didn't type a country code.
+    const toE164 = (raw) => {
+        const digits = raw.replace(/[^\d+]/g, "")
+        if (digits.startsWith("+")) return digits
+        return `+91${digits}`
+    }
+
+    const sendOTP = async () => {
         if (!form.phone || form.phone.trim().length < 10) {
             showNotification("error", "Please enter a valid phone number.")
             return
         }
-        const otp = Math.floor(100000 + Math.random() * 900000).toString()
-        setGeneratedOtp(otp)
-        setOtpModal(true)
+        setSendingOtp(true)
+        try {
+            // (Re)create the invisible reCAPTCHA each time we send, so a stale
+            // verifier from a previous attempt doesn't cause "already rendered" errors.
+            if (window.recaptchaVerifier) {
+                window.recaptchaVerifier.clear()
+            }
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                size: 'invisible',
+            })
+
+            const phoneNumber = toE164(form.phone.trim())
+            const result = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
+            setConfirmationResult(result)
+            setOtpModal(true)
+            showNotification("success", "OTP sent! Check your phone.")
+        } catch (err) {
+            console.error("OTP send error:", err)
+            if (err.code === "auth/invalid-phone-number") {
+                showNotification("error", "That phone number looks invalid. Include the country code, e.g. +91XXXXXXXXXX.")
+            } else if (err.code === "auth/too-many-requests") {
+                showNotification("error", "Too many attempts. Please wait a bit and try again.")
+            } else {
+                showNotification("error", "Couldn't send OTP: " + err.message)
+            }
+            if (window.recaptchaVerifier) {
+                window.recaptchaVerifier.clear()
+            }
+        } finally {
+            setSendingOtp(false)
+        }
     }
 
-    const verifyOTP = () => {
-        if (enteredOtp === generatedOtp) {
+    const verifyOTP = async () => {
+        if (!confirmationResult) {
+            showNotification("error", "Please request a new OTP first.")
+            return
+        }
+        setVerifyingOtp(true)
+        try {
+            await confirmationResult.confirm(enteredOtp)
             setform(prev => ({ ...prev, phoneVerified: true }))
             setOtpModal(false)
             setEnteredOtp("")
+            setConfirmationResult(null)
             showNotification("success", "Phone number verified successfully!")
-        } else {
+        } catch (err) {
+            console.error("OTP verify error:", err)
             showNotification("error", "Invalid OTP. Please try again.")
+        } finally {
+            setVerifyingOtp(false)
         }
     }
 
@@ -223,13 +273,15 @@ const Dashboard = () => {
                                     <button 
                                         type="button" 
                                         onClick={sendOTP} 
-                                        disabled={!form.phone || form.phone.trim().length < 10}
+                                        disabled={!form.phone || form.phone.trim().length < 10 || sendingOtp}
                                         className="bg-black text-white hover:bg-neutral-800 disabled:bg-gray-150 disabled:text-gray-400 disabled:cursor-not-allowed font-semibold rounded-lg text-xs px-4 py-2 text-center transition-all whitespace-nowrap"
                                     >
-                                        Verify Number
+                                        {sendingOtp ? "Sending..." : "Verify Number"}
                                     </button>
                                 )}
                             </div>
+                            {/* Firebase renders its invisible reCAPTCHA widget into this div */}
+                            <div id="recaptcha-container"></div>
                         </div>
                     </div>
 
@@ -369,10 +421,7 @@ const Dashboard = () => {
                     <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
                         <h3 className="text-lg font-bold text-black">OTP Verification</h3>
                         <p className="text-sm text-gray-600">Enter the 6-digit OTP code sent to <span className="font-semibold text-black">{form.phone}</span>.</p>
-                        <p className="text-xs text-blue-600 bg-blue-50 border border-blue-200 p-2.5 rounded-lg font-mono text-center select-all">
-                              OTP: <strong>{generatedOtp}</strong>
-                        </p>
-                        
+
                         <input 
                             value={enteredOtp} 
                             onChange={(e) => setEnteredOtp(e.target.value)} 
@@ -393,9 +442,10 @@ const Dashboard = () => {
                             <button 
                                 type="button" 
                                 onClick={verifyOTP}
-                                className="flex-1 p-3 text-white bg-black hover:bg-neutral-800 font-semibold rounded-lg text-sm text-center transition-all"
+                                disabled={verifyingOtp || enteredOtp.length < 6}
+                                className="flex-1 p-3 text-white bg-black hover:bg-neutral-800 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold rounded-lg text-sm text-center transition-all"
                             >
-                                Verify
+                                {verifyingOtp ? "Verifying..." : "Verify"}
                             </button>
                         </div>
                     </div>
